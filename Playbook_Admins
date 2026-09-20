@@ -1,0 +1,26 @@
+## 2. Playbook für Systemhaus-Admins (MSP Super-Tenant)
+
+### A. Endpoint-Hardening & Remediation Workflow
+Wenn Endkunden-Nodes Compliance-Abweichungen melden, liefert das System direkt ausführbare Remediation-Befehle im Dashboard oder via REST-API.
+
+1. **Hardening-Report senden (Client/Agent-Perspektive)**:
+   POST-Payload an `/api/v1/hardening/report` senden.
+
+```json
+{
+  "node_id": "srv-prod-db-01",
+  "success": false,
+  "open_issues": 2,
+  "failed_controls": [
+    {
+      "control_id": "CIS-3.2.2",
+      "description": "Ensure IP forwarding is disabled",
+      "remediation_cmd": "sysctl -w net.ipv4.ip_forward=0"
+    },
+    {
+      "control_id": "CIS-5.2.10",
+      "description": "Ensure SSH Root Login is disabled",
+      "remediation_cmd": "sed -i 's/^PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config && systemctl reload sshd"
+    }
+  ]
+}
