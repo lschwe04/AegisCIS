@@ -1,0 +1,10 @@
+3. Playbook für Endkunden-Admins (Tenant Admin)
+Mandanteneigene Audits & Reports
+Als Endkunden-Administrator hast du durch RLS ausschließlich Zugriff auf die Nodes deines Unternehmens.
+
+Status-Prüfung: Lese den Hardening-Status aller eigenen Server ab:
+
+SELECT node_id, cis_level_1_compliant, open_issues, last_report_time 
+FROM hardening_status;
+
+Audit-Log-Einsicht: Alle administrativen Eingriffe werden unveränderbar dokumentiert. IP-Adressen werden gemäß Art. 5 DSGVO anonymisiert (192.168.1.0/24 bzw. masked-ipv6).

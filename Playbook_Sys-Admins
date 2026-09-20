@@ -24,3 +24,13 @@ Wenn Endkunden-Nodes Compliance-Abweichungen melden, liefert das System direkt a
     }
   ]
 }
+
+Remediation durchführen:
+
+Öffne das AegisCIS Admin-Dashboard.
+
+Filter nach Status cis_level_1_compliant = false.
+
+Kopiere den gelieferten remediation_cmd und führe diesen via RMM (z. B. NinjaRMM, Datto) auf dem Zielknoten aus.
+
+Nach dem nächsten Agent-Run schaltet der Node automatisch auf cis_level_1_compliant = true.

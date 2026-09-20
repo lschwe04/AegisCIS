@@ -1,0 +1,24 @@
+AegisCIS ermöglicht Prüfern die eigenständige, mathematische Verifikation der Unveränderbarkeit aller Audit-Logs ohne tiefere SQL-Kenntnisse.
+
+Schritt-für-Schritt Verifikationsprozess
+Bereitstellung der Lese-Anmeldedaten:
+Der Systemhaus-Admin stellt dem Prüfer einen Read-Only-Datenbank-User zur Verfügung.
+
+Ausführung der Hash-Ketten-Prüfung:
+Führe das mitgelieferte Tool aegis-cli im Terminal aus:
+
+DATABASE_URL="postgres://readonly_auditor:secret@db:5432/aegis" \
+aegis-cli --tenant="12345678-1111-2222-3333-444455556666" --month="2026-09"
+
+Ergebnis-Interpretation:
+
+Erfolgsfall (100% Intakt):
+
+🔒 BSI WORM Audit gestartet für Mandant: 12345678-1111-2222-3333-444455556666 (Monat: 2026-09)
+✅ ERFOLG: 14205 Logs validiert. Kryptografische Integrität zu 100% bestätigt.
+
+Abweichungsfall (Manipulationsversuch):
+
+❌ TAMPERING DETECTED at ID 8492! Payload/Zeitstempel manipuliert.
+
+BSI-Hinweis: Sollte ein Log-Eintrag direkt in der Datenbank verändert worden sein, stimmt der rechnungsbasierte SHA256-Hash nicht mehr mit dem gespeicherten current_hash überein. Die Audit-Kette gilt als gebrochen.

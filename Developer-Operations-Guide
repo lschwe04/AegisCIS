@@ -1,0 +1,34 @@
+API-Fehlerkontrakte (RFC 7807)
+Die API antwortet bei Fehlern stets mit strukturierten application/problem+json Datensätzen:
+
+{
+  "code": "ERR_UNAUTHORIZED",
+  "message": "Missing MSP or Tenant Context",
+  "details": "Header 'X-MSP-ID' or 'X-Tenant-ID' was not provided."
+}
+
+Wichtige Error-Codes:
+ERR_UNAUTHORIZED: Fehlende oder ungültige Mandanten-Token.
+
+ERR_INVALID_PAYLOAD: Syntaktisch fehlerhaftes JSON im Reporting.
+
+ERR_DB_WRITE_FAILED: Datenbank-Persistierungsfehler.
+
+Installation & Kompilierung
+1. Datenbank-Migrationspfad anwenden
+
+psql $DATABASE_URL -f migrations/001_msp_hierarchy_and_worm.sql
+psql $DATABASE_URL -f migrations/002_hardening_remediation_ux.sql
+psql $DATABASE_URL -f migrations/003_performance_and_audit_ux.sql
+
+2. Go-Abhängigkeiten installieren & CLI bauen
+
+go mod init aegis
+go get [github.com/jackc/pgx/v5](https://github.com/jackc/pgx/v5)
+go mod tidy
+
+# CLI kompilieren (Windows Executable)
+go build -o aegis-cli.exe ./cmd/aegis-cli
+
+# Cross-Compile für Linux-Audit-Server
+$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o aegis-cli-linux ./cmd/aegis-cli
