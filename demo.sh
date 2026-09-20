@@ -68,7 +68,7 @@ echo "=== 6. Warte auf WORM Worker (Batch-Flush, 3 Sek.) ==="
 sleep 3
 
 echo "=== 7. Führe BSI CLI Verifizierung aus ==="
-export DATABASE_URL="postgres://readonly_auditor:secret@localhost:5432/aegis"
+export DATABASE_URL="postgres://readonly_auditor:secret@localhost:5433/aegis"
 ./bin/aegis-cli \
     --tenant="22222222-2222-2222-2222-222222222222" \
     --month="2026-09"
