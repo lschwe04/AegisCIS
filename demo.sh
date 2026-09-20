@@ -73,12 +73,13 @@ echo "=== 5. Starte Aegis Agent (Simuliert Node-Scan & Report) ==="
 echo "=== 6. Warte auf WORM Worker (Batch-Flush, 3 Sek.) ==="
 sleep 3
 
+echo "=== 6.b ATTACK-SIMULATION: Hinterhältiges DB-Update hinterm Rücken der App ==="
 psql "$DATABASE_URL" -c "UPDATE audit_logs SET payload = '{\"hacked\": true}' WHERE id = (SELECT id FROM audit_logs LIMIT 1);" >/dev/null
 
-echo "=== 7. Führe BSI CLI Verifizierung aus ==="
+echo "=== 7. Führe BSI CLI Verifizierung aus (Erwartet Kettenbruch-Alarm) ==="
 export DATABASE_URL="postgres://readonly_auditor:secret@localhost:5433/aegis"
 ./bin/aegis-cli \
     --tenant="22222222-2222-2222-2222-222222222222" \
-    --month="2026-09"
+    --month="2026-09" || true
 
-echo "=== 🎉 DEMO ERFOLGREICH DURCHGELAUFEN ==="
+echo "=== 🎉 TAMPER-VERIFICATION-DEMO DURCHGELAUFEN ==="
