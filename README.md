@@ -8,27 +8,15 @@
 
 ```mermaid
 graph TD
-    subgraph EdgeNodes ["Edge / Nodes"]
-        Node[Managed Node] -->|local scan| Agent[Aegis Agent]
-    end
-
-    subgraph CoreAPI ["Core API (aegis-server)"]
-        Agent -->|HTTPS POST + X-API-Key| Server[Aegis Server]
-        Server --> Auth[Auth Middleware / SHA256 Hash]
-        Auth --> AuditMw[Audit Log Middleware / DSGVO /24 IP Masking]
-    end
-
-    subgraph StorageWORM ["Storage & WORM Pipeline (PostgreSQL)"]
-        AuditMw --> Staging[(audit_events_staging)]
-        Worker[WORM Background Worker] -->|FOR UPDATE SKIP LOCKED batch| Staging
-        Worker -->|SHA256 Hash Chain RAM| WORM[(partitioned audit_logs WORM)]
-        Auth --> HardeningDB[(hardening_status Composite PK)]
-    end
-
-    subgraph UXCompliance ["UX & Compliance"]
-        HardeningDB --> Dashboard[Dashboard / RMM Remediation Copy]
-        WORM --> CLI[aegis-cli BSI Verifier]
-    end
+    Node[Managed Node] -->|scan| Agent[Aegis Agent]
+    Agent -->|HTTPS POST| Server[Aegis Server]
+    Server --> Auth[Auth & Audit Middleware / DSGVO /24]
+    Auth --> Staging[(audit_events_staging)]
+    Worker[WORM Background Worker] -->|FOR UPDATE SKIP LOCKED| Staging
+    Worker -->|SHA256 Hash Chain RAM| WORM[(partitioned audit_logs WORM)]
+    Auth --> Hardening[(hardening_status Composite PK)]
+    Hardening --> Dashboard[Dashboard / RMM Remediation Copy]
+    WORM --> CLI[aegis-cli BSI Verifier]
 
 🎯 Policy Tiers (Mandanten-Skalierung ohne Code-Forks)
 AegisCIS steuert Funktionstiefen über mandantenspezifische Tier-Konfigurationen:
