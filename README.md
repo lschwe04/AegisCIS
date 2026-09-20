@@ -6,17 +6,19 @@
 
 ## 🏗️ Systemarchitektur & Datenfluss
 
-```mermaid
-graph TD
-    Node["Managed Node"] -->|scan| Agent["Aegis Agent"]
-    Agent -->|HTTPS POST| Server["Aegis Server"]
-    Server --> Auth["Auth and Audit /24 IP"]
-    Auth --> Staging[("audit_events_staging")]
-    Worker["WORM Background Worker"] -->|FOR UPDATE SKIP LOCKED| Staging
-    Worker -->|SHA256 Hash Chain RAM| WORM[("partitioned audit_logs WORM")]
-    Auth --> Hardening[("hardening_status Composite PK")]
-    Hardening --> Dashboard["Dashboard / RMM Remediation Copy"]
-    WORM --> CLI["aegis-cli BSI Verifier"]
+[Managed Node] 
+      │ (local scan)
+      ▼
+[Aegis Agent] 
+      │ (HTTPS POST + X-API-Key)
+      ▼
+[Aegis Server] ──(Auth & DSGVO /24 IP-Masking)──► [hardening_status (Composite PK)] ──► [Dashboard / RMM Remediation]
+      │
+      ▼ (async staging)
+[audit_events_staging]
+      │ (FOR UPDATE SKIP LOCKED batch)
+      ▼
+[WORM Background Worker] ──(SHA256 Hash Chain RAM)──► [partitioned audit_logs WORM] ──► [aegis-cli BSI Verifier]
 
 🎯 Policy Tiers (Mandanten-Skalierung ohne Code-Forks)
 AegisCIS steuert Funktionstiefen über mandantenspezifische Tier-Konfigurationen:
