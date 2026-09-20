@@ -29,6 +29,7 @@ graph TD
         HardeningDB --> Dashboard[Dashboard / RMM Remediation Copy]
         WORM --> CLI[aegis-cli BSI Verifier]
     end
+    
 
 🎯 Policy Tiers (Mandanten-Skalierung ohne Code-Forks)
 AegisCIS steuert Funktionstiefen über mandantenspezifische Tier-Konfigurationen:
