@@ -2,14 +2,32 @@ package middleware
 
 import (
 	"log/slog"
+	"net"
 	"net/http"
+	"strings"
 
 	"aegis/internal/auth"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// AuditLogMiddleware erfasst Mutationen und puffert sie in Staging
+// maskIP entfernt das letzte Oktett für IPv4 oder maskiert IPv6 für DSGVO Art. 32
+func maskIP(remoteAddr string) string {
+	ipStr, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		ipStr = remoteAddr
+	}
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return "unknown"
+	}
+	if ip.To4() != nil {
+		parts := strings.Split(ipStr, ".")
+		return parts[0] + "." + parts[1] + "." + parts[2] + ".0/24"
+	}
+	return "masked-ipv6" // Für vollständige BSI-Konzepte hier /64 Maskierung einbauen
+}
+
 func AuditLogMiddleware(dbPool *pgxpool.Pool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -24,19 +42,15 @@ func AuditLogMiddleware(dbPool *pgxpool.Pool) func(http.Handler) http.Handler {
 					return
 				}
 
-				// Payload-Kopie für DSGVO Art. 32 (PII/Secrets müssen vorher maskiert werden)
-				ipAddress := r.RemoteAddr
-				payload := `{"ip": "` + ipAddress + `", "path": "` + r.URL.Path + `"}`
+				maskedIP := maskIP(r.RemoteAddr)
+				payload := `{"ip": "` + maskedIP + `", "path": "` + r.URL.Path + `"}`
 
-				// Write-Ahead in Staging (ohne WORM-Locking)
 				_, err := dbPool.Exec(r.Context(), `
 					INSERT INTO audit_events_staging (msp_id, tenant_id, action, actor, node_id, payload) 
 					VALUES ($1, $2, $3, $4, $5, $6)
 				`, mspID, tenantID, r.Method, actor, "system_api", payload)
 
 				if err != nil {
-					// Prometheus Metrik Stub
-					// metrics.AuditStagingErrors.Inc()
 					slog.Error("Audit Staging Insertion failed", "err", err, "tenant_id", tenantID)
 				}
 			}

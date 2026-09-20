@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -36,6 +37,12 @@ func (w *WORMBuilder) StartWORMWorker(ctx context.Context, pollInterval time.Dur
 	}
 }
 
+type stagingEvent struct {
+	id                                              int64
+	mspID, tenantID, action, actor, nodeID, payload string
+	createdAt                                       time.Time
+}
+
 func (w *WORMBuilder) processBatch(ctx context.Context) error {
 	tx, err := w.pool.Begin(ctx)
 	if err != nil {
@@ -43,7 +50,7 @@ func (w *WORMBuilder) processBatch(ctx context.Context) error {
 	}
 	defer tx.Rollback(ctx)
 
-	// 1. Hole Batch aus Staging (mit Lock auf die Zeilen)
+	// 1. Hole Batch & locke
 	rows, err := tx.Query(ctx, `
 		DELETE FROM audit_events_staging 
 		WHERE id IN (SELECT id FROM audit_events_staging ORDER BY id LIMIT 500 FOR UPDATE SKIP LOCKED)
@@ -52,19 +59,27 @@ func (w *WORMBuilder) processBatch(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
 
-	// 2. Hash-Verkettung (Batch-optimiert)
+	// Gruppiere nach Tenant für in-memory Hash-Ketten
+	eventsByTenant := make(map[string][]stagingEvent)
 	for rows.Next() {
-		var id int64
-		var mspID, tenantID, action, actor, nodeID, payload string
-		var createdAt time.Time
-
-		if err := rows.Scan(&id, &mspID, &tenantID, &action, &actor, &nodeID, &payload, &createdAt); err != nil {
+		var e stagingEvent
+		if err := rows.Scan(&e.id, &e.mspID, &e.tenantID, &e.action, &e.actor, &e.nodeID, &e.payload, &e.createdAt); err != nil {
+			rows.Close()
 			return err
 		}
+		eventsByTenant[e.tenantID] = append(eventsByTenant[e.tenantID], e)
+	}
+	rows.Close()
 
-		// FOR UPDATE Lock nur für diesen spezifischen Tenant während der Hash-Berechnung
+	if len(eventsByTenant) == 0 {
+		return tx.Commit(ctx) // Nichts zu tun
+	}
+
+	batch := &pgx.Batch{}
+
+	// 2. Hash-Verkettung (In-Memory per Tenant)
+	for tenantID, events := range eventsByTenant {
 		var lastHash string
 		err = tx.QueryRow(ctx, `
 			SELECT current_hash FROM audit_logs 
@@ -75,19 +90,26 @@ func (w *WORMBuilder) processBatch(ctx context.Context) error {
 			lastHash = "0000000000000000000000000000000000000000000000000000000000000000" // BSI Genesis Hash
 		}
 
-		dataToHash := fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s",
-			lastHash, tenantID, action, actor, nodeID, payload, createdAt.Format(time.RFC3339Nano))
+		for _, e := range events {
+			dataToHash := fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s",
+				lastHash, e.tenantID, e.action, e.actor, e.nodeID, e.payload, e.createdAt.Format(time.RFC3339Nano))
 
-		hashBytes := sha256.Sum256([]byte(dataToHash))
-		currentHash := hex.EncodeToString(hashBytes[:])
+			hashBytes := sha256.Sum256([]byte(dataToHash))
+			currentHash := hex.EncodeToString(hashBytes[:])
 
-		_, err = tx.Exec(ctx, `
-			INSERT INTO audit_logs (msp_id, tenant_id, action, actor, node_id, payload, prev_hash, current_hash, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		`, mspID, tenantID, action, actor, nodeID, payload, lastHash, currentHash, createdAt)
-		if err != nil {
-			return err
+			batch.Queue(`
+				INSERT INTO audit_logs (msp_id, tenant_id, action, actor, node_id, payload, prev_hash, current_hash, created_at)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			`, e.mspID, e.tenantID, e.action, e.actor, e.nodeID, e.payload, lastHash, currentHash, e.createdAt)
+
+			lastHash = currentHash // Verkettung im RAM vorantreiben
 		}
+	}
+
+	// 3. Batch-Execution (1 DB-Roundtrip für alle 500 Inserts)
+	br := tx.SendBatch(ctx, batch)
+	if err := br.Close(); err != nil {
+		return fmt.Errorf("batch insert failed: %w", err)
 	}
 
 	return tx.Commit(ctx)
