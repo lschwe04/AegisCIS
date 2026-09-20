@@ -16,7 +16,7 @@ import (
 func AuthMiddleware(dbPool *pgxpool.Pool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// API Key aus dem Header "Authorization: Bearer <key>" oder "X-API-Key" extrahieren
+			// 1. API Key aus dem Header "X-API-Key" oder "Authorization: Bearer <key>" extrahieren
 			apiKey := r.Header.Get("X-API-Key")
 			if apiKey == "" {
 				authHeader := r.Header.Get("Authorization")
@@ -25,12 +25,17 @@ func AuthMiddleware(dbPool *pgxpool.Pool) func(http.Handler) http.Handler {
 				}
 			}
 
+			// 2. Fallback: API Key aus den URL-Query-Parametern extrahieren (Ideal für Browser & Demos)
+			if apiKey == "" {
+				apiKey = r.URL.Query().Get("api_key")
+			}
+
 			if apiKey == "" {
 				api.SendError(w, http.StatusUnauthorized, api.ErrUnauthorized, "Missing API Key", "")
 				return
 			}
 
-			// Key hashen (da wir nur Hashes in der DB speichern)
+			// Key hashen (da nur Hashes in der DB gespeichert sind)
 			hashBytes := sha256.Sum256([]byte(apiKey))
 			keyHash := hex.EncodeToString(hashBytes[:])
 

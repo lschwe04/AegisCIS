@@ -1,5 +1,3 @@
-## 2. Playbook für Systemhaus-Admins (MSP Super-Tenant)
-
 ### A. Endpoint-Hardening & Remediation Workflow
 Wenn Endkunden-Nodes Compliance-Abweichungen melden, liefert das System direkt ausführbare Remediation-Befehle im Dashboard oder via REST-API.
 
