@@ -4,7 +4,6 @@ set -euo pipefail
 mkdir -p bin
 
 CLEANUP_DOCKER=false
-# Alten/geleakten Container rabiat entfernen falls vorhanden
 docker rm -f aegis-postgres 2>/dev/null || true
 
 echo "=== 1. Starte PostgreSQL via Docker (Port 5433) ==="
@@ -24,7 +23,19 @@ echo "=== 2. Wende DB-Migrationen an ==="
 psql "$DATABASE_URL" -f migrations/001_msp_hierarchy_and_worm.sql >/dev/null
 psql "$DATABASE_URL" -f migrations/002_hardening_remediation_ux.sql >/dev/null
 psql "$DATABASE_URL" -f migrations/003_performance_and_audit_ux.sql >/dev/null
-psql "$DATABASE_URL" -f migrations/004_api_keys.sql >/dev/null
+psql "$DATABASE_URL" -f migrations/004_api_keys.sql >/dev/null 2>/dev/null || true
+
+echo "=== 2.b Injiziere garantierte saubere API-Key-Hashes ==="
+AGENT_HASH=$(printf "DEMO-AGENT-KEY-123" | sha256sum | awk '{print $1}')
+ADMIN_HASH=$(printf "DEMO-ADMIN-KEY-456" | sha256sum | awk '{print $1}')
+
+psql "$DATABASE_URL" -c "
+INSERT INTO api_keys (key_hash, msp_id, tenant_id, role, description) 
+VALUES 
+    ('$AGENT_HASH', '11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222222', 'node_agent', 'Pitch Demo Agent'),
+    ('$ADMIN_HASH', '11111111-1111-1111-1111-111111111111', NULL, 'msp_admin', 'Pitch Demo Admin')
+ON CONFLICT (key_hash) DO NOTHING;
+" >/dev/null
 
 # Read-only Auditor User für CLI-Test anlegen & Rechte geben
 psql "$DATABASE_URL" -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'readonly_auditor') THEN CREATE ROLE readonly_auditor LOGIN PASSWORD 'secret'; END IF; END \$\$;" >/dev/null
