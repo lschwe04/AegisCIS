@@ -8,8 +8,11 @@
 
 AegisCIS erzwingt eine strikte 3-stufige Hierarchie auf Datenbank- und API-Ebene:
 
-Systemhaus (MSP-ID) -> Endkunde (Tenant-ID) -> Node / Server (Node-ID)
+<p align="center">
+  <img src="docs/diagram.jpg" alt="AegisCIS Architecture Flow" width="650">
+</p>
 
 * **Isolation**: PostgreSQL Row Level Security (RLS) trennt Daten auf Datenbankebene nach `msp_id` und `tenant_id`.
 * **Kollisionsfreiheit**: Alle Hardening-Status-Einträge nutzen einen Composite Primary Key `(msp_id, tenant_id, node_id)`.
 * **Asynchroner WORM-Engine**: API-Mutationen werden latenzfrei (<20ms) in Staging-Tabellen gepuffert und von einem Background-Worker in-memory verkettet und chargenweise in die WORM-Partitionen geschrieben.
+
