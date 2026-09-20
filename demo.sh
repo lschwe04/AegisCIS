@@ -1,30 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Verzeichnis für Binaries erstellen
 mkdir -p bin
 
 CLEANUP_DOCKER=false
-if ! docker ps --format '{{.Names}}' | grep -q '^aegis-postgres$'; then
-    echo "=== 1. Starte PostgreSQL via Docker ==="
-    docker run --name aegis-postgres \
-        -e POSTGRES_USER=postgres \
-        -e POSTGRES_PASSWORD=secret \
-        -e POSTGRES_DB=aegis \
-        -p 5432:5432 \
-        -d postgres:15-alpine >/dev/null
-    CLEANUP_DOCKER=true
-    echo "Warte auf PostgreSQL (3 Sek.)..."
-    sleep 3
-else
-    echo "=== 1. PostgreSQL läuft bereits ==="
-fi
+# Alten/geleakten Container rabiat entfernen falls vorhanden
+docker rm -f aegis-postgres 2>/dev/null || true
 
-export DATABASE_URL="postgres://postgres:secret@localhost:5432/aegis"
+echo "=== 1. Starte PostgreSQL via Docker (Port 5433) ==="
+docker run --name aegis-postgres \
+    -e POSTGRES_USER=postgres \
+    -e POSTGRES_PASSWORD=secret \
+    -e POSTGRES_DB=aegis \
+    -p 5433:5432 \
+    -d postgres:15-alpine >/dev/null
+CLEANUP_DOCKER=true
+echo "Warte auf PostgreSQL (3 Sek.)..."
+sleep 3
+
+export DATABASE_URL="postgres://postgres:secret@localhost:5433/aegis"
 
 echo "=== 2. Wende DB-Migrationen an ==="
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/001_msp_hierarchy_and_worm.log >/dev/null 2>&1 || true
-# Direktes Ausführen der SQLs über psql:
 psql "$DATABASE_URL" -f migrations/001_msp_hierarchy_and_worm.sql >/dev/null
 psql "$DATABASE_URL" -f migrations/002_hardening_remediation_ux.sql >/dev/null
 psql "$DATABASE_URL" -f migrations/003_performance_and_audit_ux.sql >/dev/null
@@ -46,7 +42,6 @@ echo "=== 4. Starte Aegis Server im Hintergrund ==="
 ./bin/aegis-server &
 SERVER_PID=$!
 
-# Trap für sauberes Aufräumen bei Exit/Ctrl+C
 cleanup() {
     echo "=== 🧹 Cleanup ==="
     kill $SERVER_PID 2>/dev/null || true
