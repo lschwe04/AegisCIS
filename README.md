@@ -4,11 +4,28 @@
 
 ---
 
-## 1. Architektur- & Mandantenmodell
+## 🏗️ Systemarchitektur & Datenfluss
 
-AegisCIS erzwingt eine strikte 3-stufige Hierarchie auf Datenbank- und API-Ebene:
+```mermaid
+graph TD
+    subgraph Edge / Nodes
+        Node[Managed Node] -->|local scan| Agent[Aegis Agent]
+    end
 
-* **Isolation**: PostgreSQL Row Level Security (RLS) trennt Daten auf Datenbankebene nach `msp_id` und `tenant_id`.
-* **Kollisionsfreiheit**: Alle Hardening-Status-Einträge nutzen einen Composite Primary Key `(msp_id, tenant_id, node_id)`.
-* **Asynchroner WORM-Engine**: API-Mutationen werden latenzfrei (<20ms) in Staging-Tabellen gepuffert und von einem Background-Worker in-memory verkettet und chargenweise in die WORM-Partitionen geschrieben.
+    subgraph Core API (aegis-server)
+        Agent -->|HTTPS POST + X-API-Key| Server[Aegis Server]
+        Server --> Auth[Auth Middleware / SHA256 Hash]
+        Auth --> AuditMw[Audit Log Middleware / DSGVO /24 IP Masking]
+    end
 
+    subgraph Storage & WORM Pipeline (PostgreSQL)
+        AuditMw --> Staging[(audit_events_staging)]
+        Worker[WORM Background Worker] -->|FOR UPDATE SKIP LOCKED batch| Staging
+        Worker -->|SHA256 Hash Chain RAM| WORM[(partitioned audit_logs WORM)]
+        Auth --> HardeningDB[(hardening_status Composite PK)]
+    end
+
+    subgraph UX & Compliance
+        HardeningDB --> Dashboard[Dashboard / RMM Remediation Copy]
+        WORM --> CLI[aegis-cli BSI Verifier]
+    end
